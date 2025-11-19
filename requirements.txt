@@ -1,0 +1,80 @@
+# FastAPI and server
+fastapi==0.115.12
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+pydantic==2.10.6
+pydantic-settings==2.7.1
+email-validator==2.2.0  # Required for pydantic EmailStr validation
+
+# HTTP client
+httpx==0.28.1
+
+# Database
+psycopg[binary]==3.2.6
+supabase==2.12.0
+
+# Authentication
+pyjwt==2.10.1
+
+# Environment and utilities
+python-dotenv==1.0.1
+
+# Scheduling (for periodic deduplication)
+APScheduler==3.10.4
+
+# Cortex Hybrid RAG dependencies
+# CRITICAL: Pinned versions to prevent pip backtracking (45min+ resolver hell)
+# Python 3.12 LTS versions (production-stable, Oct 2025)
+# NOTE: Using 3.12 instead of 3.13 - most packages lack py313 support
+openai==1.109.0
+qdrant-client==1.12.1
+nest-asyncio==1.6.0
+llama-index-core==0.12.20  # Must use 0.12.x for vector-stores-qdrant compatibility
+llama-index-embeddings-openai==0.3.1  # Compatible with core 0.12.x
+llama-index-llms-openai==0.3.0  # Compatible with core 0.12.x
+llama-index-vector-stores-qdrant==0.5.0  # Requires core >=0.12.7, <0.13.0
+llama-index-readers-file==0.4.0  # Compatible with core 0.12.x
+llama-index-question-gen-openai==0.3.0  # Compatible with core 0.12.x (0.2.x requires <0.12.0)
+
+# RAG Enhancements: Multi-stage reranking + conversational chat
+llama-index-postprocessor-sbert-rerank==0.3.0  # Compatible with core 0.12.x
+sentence-transformers==5.0.0  # Required by sbert-rerank (v5.0+ supports ONNX backend)
+torch==2.6.0  # Required by sentence-transformers (CPU-only build)
+# ONNX Runtime for 2-3x faster reranker initialization (production optimization)
+onnxruntime==1.21.1  # CPU-only ONNX runtime for sentence-transformers backend
+optimum[onnxruntime]==1.27.0  # HuggingFace Optimum for ONNX model export/optimization
+
+# File parsing (lightweight - lazy loaded, no heavy ML at startup)
+# IMPORTANT: pandas pinned for Python 3.13 compatibility (unstructured dependency)
+# Research: pandas 2.2.3 has pre-built wheels for py313, avoids compilation errors
+# NOTE: unstructured 0.12-0.16.18 don't exist, jumped to 0.16.19
+pandas==2.2.3
+unstructured==0.18.15  # Latest available for py313
+unstructured-inference==0.8.6  # Compatible with unstructured 0.18.15
+unstructured-pytesseract==0.3.13
+python-magic==0.4.27
+pypdf==5.8.0
+python-docx==1.1.2
+python-pptx==1.0.2
+openpyxl==3.1.5
+msoffcrypto-tool==5.4.2
+pdfminer.six==20240706
+pillow-heif==0.22.0
+pi-heif==0.22.0
+
+# OCR support for images and scanned PDFs
+google-cloud-vision==3.11.0  # Google Cloud Vision API for OCR (HIPAA-compliant)
+pdf2image==1.17.0  # PDF to image conversion
+
+# Background job queue
+dramatiq[redis]==1.17.0
+redis==5.0.0
+
+# Error tracking
+sentry-sdk[fastapi]==2.20.0
+
+# Rate limiting
+slowapi==0.1.9
+
+# Circuit breakers and retries
+tenacity==9.0.0
