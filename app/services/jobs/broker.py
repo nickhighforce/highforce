@@ -7,7 +7,7 @@ import logging
 import dramatiq
 from dramatiq.brokers.redis import RedisBroker
 from dramatiq.middleware import (
-    AgeLimit, Callbacks, Pipelines, Prometheus, 
+    AgeLimit, Callbacks, Pipelines,
     Retries, ShutdownNotifications
 )
 
@@ -23,7 +23,6 @@ else:
     redis_broker = RedisBroker(
         url=REDIS_URL,
         middleware=[
-            Prometheus(),
             AgeLimit(),
             Retries(max_retries=3),
             Callbacks(),
