@@ -72,7 +72,7 @@ async def initialize_clients():
         logger.error(f"❌ Failed to initialize Qdrant: {e}")
         raise
 
-    # Redis
+    # Redis (optional for local dev)
     try:
         _redis_client = redis.from_url(
             settings.redis_url,
@@ -83,8 +83,9 @@ async def initialize_clients():
         _redis_client.ping()
         logger.info("✅ Redis client initialized")
     except Exception as e:
-        logger.error(f"❌ Failed to initialize Redis: {e}")
-        raise
+        logger.warning(f"⚠️  Redis not available: {e}")
+        logger.warning("⚠️  Background jobs will not work (OK for local dev)")
+        _redis_client = None
 
     logger.info("✅ All clients initialized successfully")
 
