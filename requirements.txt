@@ -22,19 +22,19 @@ python-dotenv==1.0.1
 # Scheduling (for periodic deduplication)
 APScheduler==3.10.4
 
-# Hybrid RAG dependencies - Python 3.12 compatible
+# Hybrid RAG dependencies - Python 3.12 compatible (same as old CORTEX - tested working)
 openai==1.109.0
 qdrant-client==1.12.1
 nest-asyncio==1.6.0
-llama-index-core==0.13.4  # Compatible with vector-stores-qdrant 0.8.x
-llama-index-embeddings-openai==0.5.0  # Latest version compatible with core 0.13.x
-llama-index-llms-openai==0.5.0  # Latest version compatible with core 0.13.x
-llama-index-vector-stores-qdrant==0.8.8  # Requires core >=0.13.0
-llama-index-readers-file==0.5.0  # Compatible with core 0.13.x
-llama-index-question-gen-openai==0.5.0  # Compatible with core 0.13.x
+llama-index-core==0.12.20  # Stable 0.12.x version
+llama-index-embeddings-openai==0.3.1  # Compatible with core 0.12.x
+llama-index-llms-openai==0.3.0  # Compatible with core 0.12.x
+llama-index-vector-stores-qdrant==0.5.0  # Compatible with core 0.12.x
+llama-index-readers-file==0.4.0  # Compatible with core 0.12.x
+llama-index-question-gen-openai==0.3.0  # Compatible with core 0.12.x
 
 # RAG Enhancements: Multi-stage reranking + conversational chat
-llama-index-postprocessor-sbert-rerank==0.5.0  # Compatible with core 0.13.x
+llama-index-postprocessor-sbert-rerank==0.3.0  # Compatible with core 0.12.x
 sentence-transformers==5.0.0  # Required by sbert-rerank (v5.0+ supports ONNX backend)
 torch==2.6.0  # Required by sentence-transformers (CPU-only build)
 # ONNX Runtime for 2-3x faster reranker initialization (production optimization)
