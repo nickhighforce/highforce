@@ -32,7 +32,7 @@ nest-asyncio==1.6.0
 llama-index-core==0.12.20  # Must use 0.12.x for vector-stores-qdrant compatibility
 llama-index-embeddings-openai==0.3.1  # Compatible with core 0.12.x
 llama-index-llms-openai==0.3.0  # Compatible with core 0.12.x
-llama-index-vector-stores-qdrant==0.5.0  # Requires core >=0.12.7, <0.13.0
+llama-index-vector-stores-qdrant==0.6.0  # First version available for Python 3.12
 llama-index-readers-file==0.4.0  # Compatible with core 0.12.x
 llama-index-question-gen-openai==0.3.0  # Compatible with core 0.12.x (0.2.x requires <0.12.0)
 
