@@ -18,7 +18,7 @@ def get_sync_dependencies():
     Dramatiq workers run in separate processes, so we can't share global clients.
     """
     from app.core.config import settings
-    from app.core.config_master import master_config
+    from app.core.config import settings as master_config
     from app.services.rag import UniversalIngestionPipeline
     import app.core.dependencies as deps
 

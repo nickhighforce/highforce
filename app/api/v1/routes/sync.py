@@ -51,7 +51,7 @@ async def check_can_manual_sync(
     override_source = None
 
     try:
-        from app.core.config_master import MasterConfig
+        from app.core.config import Settings as MasterConfig
         master_config = MasterConfig()
 
         if master_config.is_multi_tenant:
@@ -142,7 +142,7 @@ async def trigger_initial_sync(
     # If admin override was used, log and remove it (one-time unlock)
     if reason == "admin_override":
         try:
-            from app.core.config_master import MasterConfig
+            from app.core.config import Settings as MasterConfig
             master_config = MasterConfig()
 
             if master_config.is_multi_tenant:

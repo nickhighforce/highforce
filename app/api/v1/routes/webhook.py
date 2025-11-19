@@ -116,7 +116,7 @@ async def nango_webhook(
             # If company_id not in payload, look it up from Master Supabase
             if not company_id:
                 logger.info(f"[WEBHOOK_AUTH] company_id not in Nango payload, looking up in Master Supabase...")
-                from app.core.config_master import master_config
+                from app.core.config import settings as master_config
                 from supabase import create_client
 
                 try:

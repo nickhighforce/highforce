@@ -90,7 +90,7 @@ async def require_role(
     Raises:
         HTTPException: 403 if user doesn't have required role
     """
-    from app.core.config_master import MasterConfig
+    from app.core.config import Settings as MasterConfig
     master_config = MasterConfig()
 
     # For multi-tenant mode, check Master Supabase

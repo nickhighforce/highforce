@@ -98,7 +98,7 @@ async def invite_user(
         logger.info(f"🔍 Domain check: {domain_check}")
 
         # Get Master Supabase client for invitation
-        from app.core.config_master import MasterConfig
+        from app.core.config import Settings as MasterConfig
         from supabase import create_client
 
         master_config = MasterConfig()
@@ -219,7 +219,7 @@ async def list_users(
         List of company users with their roles and status
     """
     try:
-        from app.core.config_master import MasterConfig
+        from app.core.config import Settings as MasterConfig
         from supabase import create_client
 
         master_config = MasterConfig()
@@ -294,7 +294,7 @@ async def remove_user(
                 detail="You cannot remove yourself from the company"
             )
 
-        from app.core.config_master import MasterConfig
+        from app.core.config import Settings as MasterConfig
         from supabase import create_client
 
         master_config = MasterConfig()

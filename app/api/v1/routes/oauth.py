@@ -96,7 +96,7 @@ async def connect_start(
     logger.info(f"[OAUTH_START] Generating Nango connect session...")
     try:
         # Get user email from JWT if available
-        from app.core.config_master import MasterConfig
+        from app.core.config import Settings as MasterConfig
         master_config = MasterConfig()
         user_email = f"{user_id}@{company_id[:8]}.internal"  # Placeholder
         logger.debug(f"[OAUTH_START] Default user_email: {user_email}")
@@ -208,7 +208,7 @@ async def nango_oauth_callback(payload: NangoOAuthCallback):
     CRITICAL: payload.tenantId is the user_id (what we sent as end_user.id in /connect/start).
     We need to lookup the user's company_id from Master Supabase to save the connection correctly.
     """
-    from app.core.config_master import master_config
+    from app.core.config import settings as master_config
 
     logger.info(f"[WEBHOOK] Received OAuth callback - user_id (tenantId): {payload.tenantId}, provider: {payload.providerConfigKey}")
 
@@ -345,7 +345,7 @@ async def reconnect_oauth(
     3. User completes OAuth (must match original email)
     4. Log reconnection to audit trail
     """
-    from app.core.config_master import master_config
+    from app.core.config import settings as master_config
     from app.core.dependencies import get_master_supabase_client
     from fastapi import Depends as DependsReconnect
 

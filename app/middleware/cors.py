@@ -11,7 +11,7 @@ SECURITY:
 import logging
 from fastapi.middleware.cors import CORSMiddleware as FastAPICORSMiddleware
 from app.core.config import settings
-from app.core.config_master import master_config
+from app.core.config import settings as master_config
 
 logger = logging.getLogger(__name__)
 

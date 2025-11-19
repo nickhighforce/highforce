@@ -12,7 +12,7 @@ Each company can customize both their data AND their prompts!
 """
 import logging
 from typing import Dict, List, Optional
-from app.core.config_master import master_config
+from app.core.config import settings as master_config
 
 logger = logging.getLogger(__name__)
 
