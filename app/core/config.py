@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     environment: str = Field(default="production", description="Environment: development/staging/production")
     port: int = Field(default=8080, description="Server port")
     debug: bool = Field(default=False, description="Debug mode")
+    
+    # Multi-tenancy (HighForce is always multi-tenant)
+    is_multi_tenant: bool = Field(default=True, description="Enable multi-tenant mode (always True for HighForce)")
 
     # ============================================================================
     # DATABASE (Supabase PostgreSQL) - ONE INSTANCE FOR EVERYTHING!

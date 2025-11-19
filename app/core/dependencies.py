@@ -275,3 +275,7 @@ def get_redis_key_prefix(company_id: str) -> str:
         redis.set(f"{prefix}sync_job:1", "data")  # Key: "company:abc123:sync_job:1"
     """
     return f"company:{company_id}:"
+
+
+# Alias for backward compatibility
+get_cortex_pipeline = get_rag_pipeline
