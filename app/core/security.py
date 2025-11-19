@@ -130,6 +130,20 @@ async def get_current_user_context(
         )
 
 
+async def get_current_user_id(
+    user_context: Dict[str, str] = Depends(get_current_user_context)
+) -> str:
+    """
+    Extract just the user_id from the user context.
+
+    This is a convenience function for endpoints that only need user_id.
+
+    Returns:
+        User ID string
+    """
+    return user_context["user_id"]
+
+
 async def get_current_user_context_optional(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme)
 ) -> Optional[Dict[str, str]]:
