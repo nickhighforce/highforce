@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Depends, Request
 from supabase import Client
 
 from app.core.config import settings
-from app.core.security import verify_api_key, get_current_user_id
+from app.core.security import get_current_user_context
 from app.core.dependencies import get_supabase
 from app.core import dependencies as deps
 from app.models.schemas import SearchQuery, SearchResponse, VectorResult, GraphResult
@@ -41,8 +41,7 @@ async def _execute_search_with_retry(engine, query_text: str, filters: dict = No
 async def search(
     request: Request,
     query: SearchQuery,
-    api_key: str = Depends(verify_api_key),
-    user_id: str = Depends(get_current_user_id),
+    user_context: dict = Depends(get_current_user_context),
     supabase: Client = Depends(get_supabase)
 ):
     """
@@ -58,13 +57,15 @@ async def search(
 
     Args:
         query: Search parameters (query, vector_limit, graph_limit, include_full_emails)
-        api_key: Validated API key (X-API-Key header)
-        user_id: Authenticated user (from JWT)
+        user_context: Authenticated user context (user_id + company_id from JWT)
         supabase: Supabase client (dependency injection)
 
     Returns:
         SearchResponse: AI answer + source nodes + full email objects
     """
+    # Extract user_id and company_id from JWT
+    user_id = user_context["user_id"]
+    company_id = user_context["company_id"]
     try:
         # Query rewriting with conversation context
         conversation_hist = [
@@ -128,7 +129,7 @@ async def search(
                 emails_result = supabase.table("emails").select("*").in_(
                     "episode_id", list(episode_ids)
                 ).eq(
-                    "company_id", user_id
+                    "company_id", company_id
                 ).execute()
 
                 full_emails = emails_result.data if emails_result.data else []
