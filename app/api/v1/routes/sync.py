@@ -162,8 +162,8 @@ async def trigger_initial_sync(
             logger.error(f"Failed to remove admin override: {e}")
 
     # Create sync job
-    # TODO: Add company_id column to sync_jobs table to track which company connection
     job = supabase.table("sync_jobs").insert({
+        "company_id": company_id,  # CRITICAL: Required for multi-tenant isolation
         "user_id": user_id,
         "job_type": provider,
         "status": "queued"
@@ -218,6 +218,7 @@ async def sync_once(
     try:
         # Create job record
         job = supabase.table("sync_jobs").insert({
+            "company_id": company_id,  # CRITICAL: Required for multi-tenant isolation
             "user_id": user_id,
             "job_type": "outlook",
             "status": "queued"
@@ -266,6 +267,7 @@ async def sync_once_gmail(
     try:
         # Create job record
         job = supabase.table("sync_jobs").insert({
+            "company_id": company_id,  # CRITICAL: Required for multi-tenant isolation
             "user_id": user_id,
             "job_type": "gmail",
             "status": "queued"
@@ -320,6 +322,7 @@ async def sync_once_drive(
     try:
         # Create job record
         job = supabase.table("sync_jobs").insert({
+            "company_id": company_id,  # CRITICAL: Required for multi-tenant isolation
             "user_id": user_id,
             "job_type": "drive",
             "status": "queued"
@@ -365,6 +368,7 @@ async def sync_once_quickbooks(
     try:
         # Create job record
         job = supabase.table("sync_jobs").insert({
+            "company_id": company_id,  # CRITICAL: Required for multi-tenant isolation
             "user_id": user_id,
             "job_type": "quickbooks",
             "status": "queued"
