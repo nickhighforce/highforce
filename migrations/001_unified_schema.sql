@@ -29,8 +29,8 @@
 
 -- Enable extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "pg_crypto";  -- For encryption
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";   -- For fuzzy text search
+-- Note: pg_crypto not needed - Supabase has built-in encryption via Vault
 
 -- ============================================================================
 -- COMPANIES
