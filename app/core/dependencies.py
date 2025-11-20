@@ -220,19 +220,9 @@ def get_rag_pipeline():
         UniversalIngestionPipeline instance (lazy loaded)
     """
     from app.services.rag import UniversalIngestionPipeline
-    from app.services.rag.config import (
-        QDRANT_URL,
-        QDRANT_API_KEY,
-        QDRANT_COLLECTION_NAME,
-        OPENAI_API_KEY
-    )
 
-    return UniversalIngestionPipeline(
-        qdrant_url=QDRANT_URL,
-        qdrant_api_key=QDRANT_API_KEY,
-        collection_name=QDRANT_COLLECTION_NAME,
-        openai_api_key=OPENAI_API_KEY
-    )
+    # Pipeline reads config from app.services.rag.config automatically
+    return UniversalIngestionPipeline()
 
 
 # ============================================================================
