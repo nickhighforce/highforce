@@ -32,6 +32,9 @@ _qdrant_client: QdrantClient = None
 # Redis client (singleton)
 _redis_client: redis.Redis = None
 
+# Query engine (singleton) - lazy loaded when data exists
+query_engine = None
+
 
 # ============================================================================
 # INITIALIZATION (called on app startup)

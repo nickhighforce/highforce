@@ -14,7 +14,7 @@ from pathlib import Path
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Request
 from supabase import Client
 
-from app.core.security import get_current_user_id
+from app.core.security import get_current_user_context
 from app.core.dependencies import get_supabase, get_cortex_pipeline
 from app.services.universal.ingest import ingest_document_universal
 from app.services.ingestion.llamaindex import UniversalIngestionPipeline
@@ -98,7 +98,7 @@ def sanitize_filename(filename: str) -> str:
 async def upload_file(
     request: Request,  # Required for rate limiting
     file: UploadFile = File(...),
-    user_id: str = Depends(get_current_user_id),
+    user_context: dict = Depends(get_current_user_context),
     supabase: Client = Depends(get_supabase),
     cortex_pipeline: UniversalIngestionPipeline = Depends(get_cortex_pipeline)
 ):
@@ -132,6 +132,10 @@ async def upload_file(
         Ingestion result
     """
     try:
+        # Extract user_id and company_id from JWT
+        user_id = user_context["user_id"]
+        company_id = user_context["company_id"]
+
         # SECURITY: Validate MIME type
         if file.content_type not in ALLOWED_MIME_TYPES:
             raise HTTPException(
@@ -143,16 +147,12 @@ async def upload_file(
         safe_filename = sanitize_filename(file.filename)
 
         # SECURITY: Read file with size limit (prevent memory exhaustion)
-        file_bytes = bytearray()
-        async for chunk in file.stream():
-            if len(file_bytes) + len(chunk) > MAX_FILE_SIZE:
-                raise HTTPException(
-                    status_code=413,
-                    detail=f"File too large. Maximum size: {MAX_FILE_SIZE / 1024 / 1024:.0f}MB"
-                )
-            file_bytes.extend(chunk)
-
-        file_bytes = bytes(file_bytes)
+        file_bytes = await file.read()
+        if len(file_bytes) > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large. Maximum size: {MAX_FILE_SIZE / 1024 / 1024:.0f}MB"
+            )
 
         logger.info(f"📤 File upload: {safe_filename} ({len(file_bytes)} bytes, {file.content_type}) from user {user_id[:8]}...")
 
@@ -160,7 +160,7 @@ async def upload_file(
         result = await ingest_document_universal(
             supabase=supabase,
             cortex_pipeline=cortex_pipeline,
-            company_id=user_id,
+            company_id=company_id,  # Use company_id, not user_id!
             source='upload',
             source_id=safe_filename,  # Use sanitized filename
             document_type='file',
@@ -207,7 +207,7 @@ async def upload_file(
 async def upload_multiple_files(
     request: Request,  # Required for rate limiting
     files: list[UploadFile] = File(...),
-    user_id: str = Depends(get_current_user_id),
+    user_context: dict = Depends(get_current_user_context),
     supabase: Client = Depends(get_supabase),
     cortex_pipeline: UniversalIngestionPipeline = Depends(get_cortex_pipeline)
 ):
@@ -226,6 +226,10 @@ async def upload_multiple_files(
     Returns:
         List of ingestion results
     """
+    # Extract user_id and company_id from JWT
+    user_id = user_context["user_id"]
+    company_id = user_context["company_id"]
+
     # SECURITY: Limit number of files in batch
     if len(files) > MAX_BATCH_FILES:
         raise HTTPException(
@@ -250,46 +254,41 @@ async def upload_multiple_files(
             safe_filename = sanitize_filename(file.filename)
 
             # SECURITY: Read file with size limit
-            file_bytes = bytearray()
-            async for chunk in file.stream():
-                if len(file_bytes) + len(chunk) > MAX_FILE_SIZE:
-                    results.append({
-                        "filename": file.filename,
-                        "status": "error",
-                        "error": f"File too large (max {MAX_FILE_SIZE / 1024 / 1024:.0f}MB)"
-                    })
-                    break
-                file_bytes.extend(chunk)
-            else:
-                # Successfully read entire file
-                file_bytes = bytes(file_bytes)
-
-                logger.info(f"📤 Batch upload: {safe_filename} ({len(file_bytes)} bytes)")
-
-                result = await ingest_document_universal(
-                    supabase=supabase,
-                    cortex_pipeline=cortex_pipeline,
-                    company_id=user_id,
-                    source='upload',
-                    source_id=safe_filename,
-                    document_type='file',
-                    file_bytes=file_bytes,
-                    filename=safe_filename,
-                    file_type=file.content_type,
-                    metadata={
-                        'uploaded_by': user_id,
-                        'original_filename': file.filename,
-                        'sanitized_filename': safe_filename,
-                    }
-                )
-
+            file_bytes = await file.read()
+            if len(file_bytes) > MAX_FILE_SIZE:
                 results.append({
-                    "filename": safe_filename,
-                    "original_filename": file.filename,
-                    "status": result['status'],
-                    "characters": result.get('characters'),
-                    "error": result.get('error')
+                    "filename": file.filename,
+                    "status": "error",
+                    "error": f"File too large (max {MAX_FILE_SIZE / 1024 / 1024:.0f}MB)"
                 })
+                continue
+
+            logger.info(f"📤 Batch upload: {safe_filename} ({len(file_bytes)} bytes)")
+
+            result = await ingest_document_universal(
+                supabase=supabase,
+                cortex_pipeline=cortex_pipeline,
+                company_id=company_id,  # Use company_id, not user_id!
+                source='upload',
+                source_id=safe_filename,
+                document_type='file',
+                file_bytes=file_bytes,
+                filename=safe_filename,
+                file_type=file.content_type,
+                metadata={
+                    'uploaded_by': user_id,
+                    'original_filename': file.filename,
+                    'sanitized_filename': safe_filename,
+                }
+            )
+
+            results.append({
+                "filename": safe_filename,
+                "original_filename": file.filename,
+                "status": result['status'],
+                "characters": result.get('characters'),
+                "error": result.get('error')
+            })
 
         except Exception as e:
             logger.error(f"Failed to process {file.filename}: {e}")

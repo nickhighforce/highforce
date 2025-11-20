@@ -276,15 +276,13 @@ async def ingest_document_universal(
             'content': content,
             'content_hash': content_hash,  # Add content hash for deduplication
             'raw_data': raw_data,
-            'file_type': file_type,
-            'file_size': parse_metadata.get('file_size') or (len(file_bytes) if file_bytes else None),
             'source_created_at': source_created_at.isoformat() if source_created_at else None,
             'source_modified_at': source_modified_at.isoformat() if source_modified_at else None,
             'metadata': metadata,
             # File storage fields (NEW)
             'file_url': file_url,
-            'file_size_bytes': file_size_bytes,
-            'mime_type': mime_type,
+            'file_size_bytes': file_size_bytes or (parse_metadata.get('file_size') if parse_metadata else None) or (len(file_bytes) if file_bytes else None),
+            'mime_type': mime_type or file_type,  # Use mime_type, fallback to file_type
             # Parent-child relationship (NEW: for attachments)
             'parent_document_id': parent_document_id,
         }
