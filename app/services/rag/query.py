@@ -114,7 +114,7 @@ class HybridQueryEngine:
         vector_store = QdrantVectorStore(
             client=qdrant_client,
             collection_name=QDRANT_COLLECTION_NAME,
-            vector_name="text",  # HighForce collection uses named vector "text"
+            dense_vector_name="text",  # CRITICAL: Use dense_vector_name (not vector_name) - LlamaIndex v0.12+ parameter
             text_key="_node_content"  # Map Qdrant's "_node_content" field to LlamaIndex text field
         )
         self.qdrant_client = qdrant_client
