@@ -18,7 +18,7 @@ load_dotenv()
 
 QDRANT_URL = os.getenv("QDRANT_URL")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
-QDRANT_COLLECTION_NAME = os.getenv("QDRANT_COLLECTION_NAME", "cortex_documents")
+QDRANT_COLLECTION_NAME = os.getenv("QDRANT_COLLECTION_NAME", "HighForce")  # From .env or default to HighForce
 
 # ============================================
 # OPENAI CONFIGURATION

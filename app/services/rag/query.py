@@ -420,6 +420,7 @@ Examples:
 
             # Step 4: Use the retrieved nodes directly (no sub-questions)
             all_source_nodes = nodes  # Use the nodes we retrieved directly
+            sub_answers_list = []  # No sub-questions in this path
 
             logger.info(f"   Retrieved {len(all_source_nodes)} source nodes")
 
@@ -491,10 +492,10 @@ Examples:
                 nodes=[context_node_with_score]
             )
 
-            logger.info(f"✅ Enhanced synthesis complete with {len(top_chunks)} chunks")
+            logger.info(f"✅ Enhanced synthesis complete with {len(all_source_nodes)} chunks")
 
             # Return with enhanced answer and tracked chunks
-            final_source_nodes = sub_answers_list + top_chunks
+            final_source_nodes = sub_answers_list + all_source_nodes
 
             return {
                 "question": question,
@@ -505,7 +506,7 @@ Examples:
                     "time_range": f"{time_filter['start_date']} to {time_filter['end_date']}",
                     "enhanced": True,
                     "sub_questions": len(sub_answers_list),
-                    "chunks_used": len(top_chunks),
+                    "chunks_used": len(all_source_nodes),
                     "context_length": len(enhanced_context)
                 }
             }
