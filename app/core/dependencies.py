@@ -46,7 +46,7 @@ async def initialize_clients():
 
     Called from main.py lifespan event.
     """
-    global _supabase_client, _qdrant_client, _redis_client
+    global _supabase_client, _qdrant_client, _redis_client, query_engine
 
     logger.info("Initializing global clients...")
 
@@ -89,6 +89,16 @@ async def initialize_clients():
         logger.warning(f"⚠️  Redis not available: {e}")
         logger.warning("⚠️  Background jobs will not work (OK for local dev)")
         _redis_client = None
+
+    # Query Engine (for chat/search)
+    try:
+        from app.services.rag.query import HybridQueryEngine
+        query_engine = HybridQueryEngine()
+        logger.info("✅ Query engine initialized")
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize query engine: {e}")
+        logger.error("⚠️  Chat and search endpoints will not work")
+        query_engine = None
 
     logger.info("✅ All clients initialized successfully")
 
