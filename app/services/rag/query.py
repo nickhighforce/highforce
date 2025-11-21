@@ -113,7 +113,6 @@ class HybridQueryEngine:
         vector_store = QdrantVectorStore(
             client=qdrant_client,
             collection_name=QDRANT_COLLECTION_NAME,
-            dense_vector_name="text",  # Match the vector name in Qdrant collection
             text_key="_node_content"  # Map Qdrant's "_node_content" field to LlamaIndex text field
         )
         self.qdrant_client = qdrant_client

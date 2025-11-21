@@ -56,7 +56,6 @@ class UniversalIngestionPipeline:
             client=qdrant_client,
             aclient=qdrant_aclient,
             collection_name=QDRANT_COLLECTION_NAME,
-            dense_vector_name="text",
             text_key="_node_content"  # Map Qdrant's "_node_content" field to LlamaIndex text field
         )
         logger.info(f"✅ Qdrant Vector Store: {QDRANT_COLLECTION_NAME}")
