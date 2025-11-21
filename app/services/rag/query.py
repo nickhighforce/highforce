@@ -487,7 +487,7 @@ Examples:
             )
 
             query_bundle = QueryBundle(query_str=question)
-            final_response = await synthesizer_enhanced.asynthesize(
+            final_response = synthesizer_enhanced.synthesize(
                 query=query_bundle,
                 nodes=[context_node_with_score]
             )
