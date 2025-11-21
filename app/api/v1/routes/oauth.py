@@ -95,39 +95,9 @@ async def connect_start(
     # This enables per-user OAuth connections and proper attribution
     logger.info(f"[OAUTH_START] Generating Nango connect session...")
     try:
-        # Get user email from JWT if available
-        from app.core.config import Settings as MasterConfig
-        master_config = MasterConfig()
-        user_email = f"{user_id}@{company_id[:8]}.internal"  # Placeholder
-        logger.debug(f"[OAUTH_START] Default user_email: {user_email}")
-
-        # If we're in multi-tenant mode, try to get real email
-        if master_config.is_multi_tenant:
-            logger.debug(f"[OAUTH_START] Multi-tenant mode detected, fetching real email...")
-            try:
-                from supabase import create_client
-                master_supabase = create_client(
-                    master_config.master_supabase_url,
-                    master_config.master_supabase_service_key
-                )
-                logger.debug(f"[OAUTH_START] Querying company_users table for user_id={user_id}, company_id={company_id}")
-
-                company_user = master_supabase.table("company_users")\
-                    .select("email")\
-                    .eq("user_id", user_id)\
-                    .eq("company_id", company_id)\
-                    .maybe_single()\
-                    .execute()
-
-                if company_user.data:
-                    user_email = company_user.data["email"]
-                    logger.info(f"[OAUTH_START] ✅ Retrieved real email: {user_email}")
-                else:
-                    logger.warning(f"[OAUTH_START] ⚠️  No email found in company_users, using placeholder")
-
-            except Exception as e:
-                logger.error(f"[OAUTH_START] ❌ Could not fetch user email from Master Supabase: {e}")
-                logger.exception("[OAUTH_START] Email fetch error traceback:")
+        # Get user email from JWT context (already authenticated)
+        user_email = user_context.get("email", f"{user_id}@{company_id[:8]}.internal")
+        logger.info(f"[OAUTH_START] ✅ Using email from JWT: {user_email}")
 
         # Prepare Nango endUser payload
         # NOTE: Nango only accepts id, email, display_name in end_user
