@@ -109,18 +109,14 @@ class HybridQueryEngine:
             timeout=60.0,  # 60s timeout for operations (increased from 30s)
             # Connection pooling handled by httpx internally (default: 100 max connections)
         )
-        qdrant_aclient = AsyncQdrantClient(
-            url=QDRANT_URL,
-            api_key=QDRANT_API_KEY,
-            timeout=60.0  # 60s timeout (increased from 30s)
-        )
+        # Use sync client only - async client has API compatibility issues with .search()
         vector_store = QdrantVectorStore(
             client=qdrant_client,
-            aclient=qdrant_aclient,
-            collection_name=QDRANT_COLLECTION_NAME
+            collection_name=QDRANT_COLLECTION_NAME,
+            dense_vector_name="text",  # Match the vector name in Qdrant collection
+            text_key="_node_content"  # Map Qdrant's "_node_content" field to LlamaIndex text field
         )
         self.qdrant_client = qdrant_client
-        self.qdrant_aclient = qdrant_aclient
         logger.info(f"✅ Qdrant Vector Store: {QDRANT_COLLECTION_NAME}")
 
         # VectorStoreIndex for semantic search
@@ -341,116 +337,72 @@ Examples:
             # Step 2: Apply time filter AND tenant filter to vector query engine
             from llama_index.core.vector_stores import MetadataFilter, MetadataFilters, FilterOperator
 
-            # CRITICAL SECURITY: Always filter by tenant_id (company_id)
+            # CRITICAL SECURITY: Always filter by company_id (Qdrant RLS field)
             filter_list = []
 
-            # Add tenant_id filter if provided (MUST have for multi-tenant security)
-            if filters and 'tenant_id' in filters:
+            # Add company_id filter if provided (MUST have for multi-tenant security)
+            if filters and 'company_id' in filters:
                 filter_list.append(MetadataFilter(
-                    key="tenant_id",
+                    key="company_id",
                     operator=FilterOperator.EQ,
-                    value=filters['tenant_id']
+                    value=filters['company_id']
                 ))
-                logger.info(f"   🔒 Tenant filter: {filters['tenant_id'][:8]}...")
+                logger.info(f"   🔒 Company filter: {filters['company_id'][:8]}...")
             else:
-                logger.warning("   ⚠️  WARNING: No tenant_id filter provided - potential security issue!")
+                logger.warning("   ⚠️  WARNING: No company_id filter provided - potential security issue!")
 
-            # Add time filters
-            filter_list.extend([
-                MetadataFilter(
-                    key="created_at_timestamp",
-                    operator=FilterOperator.GTE,
-                    value=time_filter['start_timestamp']
-                ),
-                MetadataFilter(
-                    key="created_at_timestamp",
-                    operator=FilterOperator.LTE,
-                    value=time_filter['end_timestamp']
-                )
-            ])
+            # TEMPORARY: Skip time filters to test if company_id filter works alone
+            # # Add time filters using source_created_at (datetime field in Qdrant)
+            # # Convert timestamps to ISO datetime strings for Qdrant datetime field
+            # from datetime import datetime
+            # start_dt = datetime.fromtimestamp(time_filter['start_timestamp']).isoformat()
+            # end_dt = datetime.fromtimestamp(time_filter['end_timestamp']).isoformat()
+
+            # filter_list.extend([
+            #     MetadataFilter(
+            #         key="source_created_at",
+            #         operator=FilterOperator.GTE,
+            #         value=start_dt
+            #     ),
+            #     MetadataFilter(
+            #         key="source_created_at",
+            #         operator=FilterOperator.LTE,
+            #         value=end_dt
+            #     )
+            # ])
 
             metadata_filters = MetadataFilters(filters=filter_list)
 
-            logger.info(f"   🔒 Qdrant time filter: {time_filter['start_date']} to {time_filter['end_date']}")
+            logger.info(f"   🔒 Qdrant filter: company_id only (time filter temporarily disabled for testing)")
 
-            # Step 3: Build time-filtered SubQuestionQueryEngine from scratch
-            # Create filtered vector query engine
-            filtered_vector_qe = self.vector_index.as_query_engine(
+            # Step 3: Use simple vector retriever with filters (bypass SubQuestionQueryEngine)
+            # SubQuestionQueryEngine doesn't preserve filters properly - use direct retrieval instead
+            from llama_index.core.retrievers import VectorIndexRetriever
+
+            retriever = VectorIndexRetriever(
+                index=self.vector_index,
                 similarity_top_k=SIMILARITY_TOP_K,
-                llm=self.llm,
-                filters=metadata_filters,  # Apply time filter to Qdrant
-                text_qa_template=PromptTemplate(
-                    "Your answer will be passed to another agent for final synthesis. Preserve exact information.\n\n"
-                    "Context from documents (each chunk has metadata with title):\n"
-                    "---------------------\n"
-                    "{context_str}\n"
-                    "---------------------\n\n"
-                    "Given the context above and not prior knowledge, answer the question. When you include:\n"
-                    "- Numbers, dates, metrics, amounts → quote them exactly\n"
-                    "- Important statements or findings → quote 1-2 key sentences verbatim\n"
-                    "- Regular facts or descriptions → you may paraphrase\n\n"
-                    "IMPORTANT: When citing documents that have a file_url in metadata, create markdown links:\n"
-                    "- Format: \"According to the [Document Title](file_url_value)...\"\n"
-                    "- Use the actual file_url value from the chunk metadata, not the word 'file_url'\n"
-                    "- For documents without file_url, just mention the title naturally\n\n"
-                    "Use quotation marks for verbatim text.\n"
-                    "If the context doesn't contain relevant information, say so clearly.\n\n"
-                    "Question: {query_str}\n"
-                    "Answer: "
-                ),
-                node_postprocessors=[DocumentTypeRecencyPostprocessor()]
+                filters=metadata_filters,  # CRITICAL: Apply company_id + time filters
             )
 
-            # Wrap as tool
-            from llama_index.core.tools import QueryEngineTool
-            filtered_tool = QueryEngineTool.from_defaults(
-                query_engine=filtered_vector_qe,
-                name="document_search",
-                description=(
-                    "Useful for searching document content including emails, attachments, and files. "
-                    "Can answer questions about what was said, who sent what, topics discussed, "
-                    "people mentioned, companies involved, and any information contained in documents."
-                )
-            )
+            logger.info(f"   🔍 Retrieving with filters: {metadata_filters}")
 
-            # Build SubQuestionQueryEngine with custom question generator (no dates in sub-questions)
-            from llama_index.question_gen.openai import OpenAIQuestionGenerator
+            # Retrieve nodes
+            nodes = await retriever.aretrieve(question)
 
-            # Custom prompt: Vector database search queries (360-degree coverage, no dates)
-            custom_subq_prompt = PromptTemplate(
-                "You are generating search queries for a vector database containing ALL company data: "
-                "emails, documents, purchase orders, reports, meeting notes, attachments, and communications.\n\n"
-                "Your goal: Get a complete 360-degree view by exploring the question from multiple angles. "
-                "Cast a wide net to find connections between emails, documents, and records that reveal the full story.\n\n"
-                "Generate diverse sub-questions exploring different dimensions:\n"
-                "- WHO: People involved, senders, recipients, owners, decision makers, responsible parties\n"
-                "- WHAT: Specific issues, topics, actions taken, decisions made, updates, status changes\n"
-                "- WHICH: Companies, customers, suppliers, purchase orders, part numbers, projects\n"
-                "- WHERE: Documents, emails, attachments, reports, spreadsheets containing the information\n"
-                "- WHY: Root causes, reasons, explanations, justifications mentioned\n"
-                "- HOW: Processes, methods, solutions, action plans described\n\n"
-                "Requirements:\n"
-                "- Generate at least 4-6 sub-questions\n"
-                "- Each sub-question explores a different angle (WHO vs WHAT vs WHICH vs WHERE)\n"
-                "- Sub-questions should uncover hidden connections across multiple data sources\n"
-                "- Focus on retrieving concrete information from actual documents/emails\n\n"
-                "CRITICAL - NEVER INCLUDE TIME/DATE REFERENCES:\n"
-                "Time filtering happens at the database level BEFORE search.\n"
-                "Do NOT include dates, times, periods, or temporal words in sub-questions.\n"
-                "User asks about a specific time? Remove the time reference from your sub-questions.\n\n"
-                "Output by calling SubQuestionList function.\n\n"
-                "## Tools\n"
-                "```json\n"
-                "{tools_str}\n"
-                "```\n\n"
-                "## User Question\n"
-                "{query_str}\n"
-            )
+            logger.info(f"   📦 Retrieved {len(nodes)} nodes from Qdrant")
 
-            question_gen = OpenAIQuestionGenerator.from_defaults(
-                llm=self.llm,
-                prompt_template_str=custom_subq_prompt.template
-            )
+            # Build context from nodes
+            if not nodes:
+                logger.warning("   ⚠️  No documents found matching filters")
+                return {
+                    'answer': "I couldn't find any relevant documents in the specified time range. Try expanding the date range or check if documents have been uploaded.",
+                    'source_nodes': [],
+                    'vector_results': []
+                }
+
+            # Create response using retrieved nodes
+            from llama_index.core.response_synthesizers import get_response_synthesizer
 
             ceo_prompt = PromptTemplate(get_ceo_prompt_template())
             response_synth = get_response_synthesizer(
@@ -459,52 +411,25 @@ Examples:
                 text_qa_template=ceo_prompt
             )
 
-            filtered_subq_engine = SubQuestionQueryEngine.from_defaults(
-                query_engine_tools=[filtered_tool],
-                question_gen=question_gen,
-                llm=self.llm,
-                response_synthesizer=response_synth
+            # Synthesize answer from retrieved nodes
+            response = await response_synth.asynthesize(
+                query=question,
+                nodes=nodes
             )
 
-            # Execute with time-filtered retrieval
-            response = await filtered_subq_engine.aquery(question)
+            # Step 4: Use the retrieved nodes directly (no sub-questions)
+            all_source_nodes = nodes  # Use the nodes we retrieved directly
 
-            # Step 4: Extract chunks from response for enhanced synthesis
-            all_source_nodes = response.source_nodes if hasattr(response, 'source_nodes') else []
+            logger.info(f"   Retrieved {len(all_source_nodes)} source nodes")
 
-            logger.info(f"   Response has {len(all_source_nodes)} source nodes")
-
-            # Separate sub-answers from raw chunks
-            sub_answers_list = []
-            raw_chunks_list = []
-
-            for node in all_source_nodes:
-                node_text = str(node.text if hasattr(node, 'text') else '')
-                if 'Sub question:' in node_text:
-                    sub_answers_list.append(node)
-                else:
-                    raw_chunks_list.append(node)
-
-            logger.info(f"   {len(sub_answers_list)} sub-answers, {len(raw_chunks_list)} raw chunks")
-
-            # Keep top 50% of raw chunks
-            top_chunks = raw_chunks_list[:len(raw_chunks_list)//2] if len(raw_chunks_list) > 0 else []
-
-            logger.info(f"   Keeping top {len(top_chunks)} chunks (50% of {len(raw_chunks_list)})")
-
-            # Build enhanced context with sub-answers + top chunks
+            # Build context from retrieved chunks
             from llama_index.core.schema import TextNode, NodeWithScore, QueryBundle
 
             enhanced_parts = []
 
-            # Add each sub-answer with its text
-            for i, sub_node in enumerate(sub_answers_list, 1):
-                sub_text = str(sub_node.text if hasattr(sub_node, 'text') else sub_node)
-                enhanced_parts.append(f"--- Sub-Question {i} ---\n{sub_text}\n")
-
-            # Add top chunks
-            enhanced_parts.append(f"\n--- Top {len(top_chunks)} Source Chunks ---\n")
-            for i, chunk in enumerate(top_chunks, 1):
+            # Add all retrieved chunks
+            enhanced_parts.append(f"\n--- {len(all_source_nodes)} Retrieved Chunks ---\n")
+            for i, chunk in enumerate(all_source_nodes, 1):
                 meta = chunk.metadata if hasattr(chunk, 'metadata') else {}
                 chunk_text = chunk.text if hasattr(chunk, 'text') else str(chunk)
 

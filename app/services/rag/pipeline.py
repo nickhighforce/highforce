@@ -55,7 +55,9 @@ class UniversalIngestionPipeline:
         self.vector_store = QdrantVectorStore(
             client=qdrant_client,
             aclient=qdrant_aclient,
-            collection_name=QDRANT_COLLECTION_NAME
+            collection_name=QDRANT_COLLECTION_NAME,
+            dense_vector_name="text",
+            text_key="_node_content"  # Map Qdrant's "_node_content" field to LlamaIndex text field
         )
         logger.info(f"✅ Qdrant Vector Store: {QDRANT_COLLECTION_NAME}")
 
@@ -172,6 +174,7 @@ class UniversalIngestionPipeline:
         content = document_row.get("content") or document_row.get("full_body", "")
 
         # Metadata
+        company_id = document_row.get("company_id", "")  # CRITICAL: Multi-tenant isolation
         tenant_id = document_row.get("tenant_id", "")
         source_id = document_row.get("source_id") or document_row.get("message_id", str(doc_id))
         created_at = document_row.get("source_created_at") or document_row.get("received_datetime", "")
@@ -235,9 +238,11 @@ class UniversalIngestionPipeline:
                 "title": title,
                 "source": source,
                 "document_type": document_type,
+                "company_id": company_id,  # CRITICAL: Multi-tenant isolation for search filtering
                 "tenant_id": tenant_id,
                 "created_at": str(created_at),
                 "created_at_timestamp": created_at_timestamp,  # Unix timestamp for filtering
+                "source_created_at": str(created_at) if created_at else None,  # ISO datetime string for Qdrant datetime field
                 # THREAD DEDUPLICATION: Add thread metadata to Qdrant payload
                 "thread_id": document_row.get("metadata", {}).get("thread_id", "") or
                             document_row.get("raw_data", {}).get("thread_id", ""),

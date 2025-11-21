@@ -267,6 +267,11 @@ async def ingest_document_universal(
         if metadata:
             metadata = strip_null_bytes_from_dict(metadata)
 
+        # FIX: For uploads without source_created_at, use current time
+        if not source_created_at and source == 'upload':
+            source_created_at = datetime.utcnow()
+            logger.info(f"   📅 Upload detected without timestamp, using current time: {source_created_at}")
+
         document_row = {
             'company_id': company_id,
             'source': source,
