@@ -26,6 +26,20 @@ def get_cors_middleware():
     - Dev/Staging: Include localhost for development
     - Never allows "null" origin (file:// protocol attacks)
     """
+    # TEMPORARY DEV MODE: Allow all origins for internet testing
+    # TODO: Re-enable strict CORS when ready for production
+    if settings.environment == "development":
+        logger.warning("⚠️  DEV MODE: CORS allowing ALL origins (*) for testing")
+        return FastAPICORSMiddleware, {
+            "allow_origins": ["*"],  # Allow all origins temporarily
+            "allow_credentials": False,  # Must be False when using "*"
+            "allow_methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "allow_headers": ["*"],  # Allow all headers
+            "expose_headers": ["X-Request-ID"],
+            "max_age": 600,
+        }
+
+    # PRODUCTION: Strict origin whitelist
     allowed_origins = []
 
     # Load frontend URL from master Supabase if multi-tenant mode
@@ -53,17 +67,6 @@ def get_cors_middleware():
     if "https://connectorfrontend.vercel.app" not in allowed_origins:
         allowed_origins.append("https://connectorfrontend.vercel.app")
         logger.info("✅ CORS: Added Vercel frontend as fallback")
-
-    # Development/Staging: Add localhost
-    if settings.environment != "production":
-        allowed_origins.extend([
-            "http://localhost:3000",  # Next.js dev server
-            "http://localhost:3001",  # Master admin frontend
-            "http://localhost:5173",  # Vite dev server
-            "http://localhost:8080",  # Backend dev
-        ])
-        logger.info("✅ CORS: Added localhost origins for development")
-        # SECURITY: Do NOT include "null" - it allows file:// based attacks
 
     logger.info(f"🌐 CORS allowed origins: {allowed_origins}")
 
