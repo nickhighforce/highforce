@@ -114,6 +114,7 @@ class HybridQueryEngine:
         vector_store = QdrantVectorStore(
             client=qdrant_client,
             collection_name=QDRANT_COLLECTION_NAME,
+            vector_name="text",  # HighForce collection uses named vector "text"
             text_key="_node_content"  # Map Qdrant's "_node_content" field to LlamaIndex text field
         )
         self.qdrant_client = qdrant_client
@@ -387,8 +388,8 @@ Examples:
 
             logger.info(f"   🔍 Retrieving with filters: {metadata_filters}")
 
-            # Retrieve nodes
-            nodes = await retriever.aretrieve(question)
+            # Retrieve nodes (using sync method due to Qdrant v1.16.0 async API issues)
+            nodes = retriever.retrieve(question)
 
             logger.info(f"   📦 Retrieved {len(nodes)} nodes from Qdrant")
 
