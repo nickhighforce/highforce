@@ -230,7 +230,7 @@ Examples:
 """
 
         try:
-            result = await self.llm.acomplete(prompt)
+            result = self.llm.complete(prompt)
             result_text = str(result).strip()
 
             # Remove markdown if present
