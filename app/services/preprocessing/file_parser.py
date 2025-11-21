@@ -306,7 +306,22 @@ def extract_text_from_file(
             logger.info(f"   🔍 Running context-aware OCR on image (GPT-4o Vision)...")
             text, metadata = extract_with_vision(file_path, file_type, check_business_relevance=check_business_relevance)
             # Note: extract_with_vision already handles errors gracefully and returns skip signal if needed
-        
+
+        # Simple plain text files - just read them directly!
+        elif file_type in ['text/plain', 'text/markdown', 'text/csv', 'text/html']:
+            logger.info(f"   📝 Reading plain text file directly...")
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                text = f.read()
+
+            metadata = {
+                "parser": "plain_text_reader",
+                "file_type": file_type,
+                "file_name": Path(file_path).name,
+                "file_size": os.path.getsize(file_path),
+                "characters": len(text),
+            }
+            logger.info(f"   ✅ Read {len(text)} characters from plain text file")
+
         else:
             # Non-PDF, non-image files: use standard Unstructured
             text, metadata = extract_with_generic_parser(file_path, file_type)

@@ -101,7 +101,7 @@ class HybridQueryEngine:
             api_key=OPENAI_API_KEY
         )
 
-        # Qdrant vector store (with async client for retrieval)
+        # Qdrant vector store
         # Increased timeout for slower connections and added retries
         qdrant_client = QdrantClient(
             url=QDRANT_URL,
@@ -109,7 +109,8 @@ class HybridQueryEngine:
             timeout=60.0,  # 60s timeout for operations (increased from 30s)
             # Connection pooling handled by httpx internally (default: 100 max connections)
         )
-        # Use sync client only - async client has API compatibility issues with .search()
+        # Use sync client only - Qdrant client v1.16.0 has async API breaking changes
+        # LlamaIndex will use sync methods which work correctly
         vector_store = QdrantVectorStore(
             client=qdrant_client,
             collection_name=QDRANT_COLLECTION_NAME,

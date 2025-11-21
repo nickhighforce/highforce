@@ -20,11 +20,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["search"])
 
 
-async def _get_query_engine():
-    """Get the global query engine from dependencies"""
-    if not deps.query_engine:
-        raise HTTPException(status_code=503, detail="Query engine not initialized")
-    return deps.query_engine
+async def _get_query_engine(company_id: str):
+    """Create query engine on-demand for this request"""
+    from app.services.rag.query import HybridQueryEngine
+
+    # Create a fresh query engine for this company
+    engine = HybridQueryEngine()
+    return engine
 
 
 @with_openai_retry
@@ -77,11 +79,16 @@ async def search(
         logger.info(f"Search - Original: {query.query}")
         logger.info(f"Search - Rewritten: {rewritten_query}")
 
-        # Initialize hybrid query engine (lazy)
-        engine = await _get_query_engine()
+        # Initialize hybrid query engine (per-request)
+        engine = await _get_query_engine(company_id)
+
+        # Build metadata filters for company isolation
+        metadata_filters = {"company_id": company_id}
+        if hasattr(query, 'filters') and query.filters:
+            metadata_filters.update(query.filters)
 
         # Execute query using hybrid retrieval with automatic retry on failures
-        result = await _execute_search_with_retry(engine, rewritten_query)
+        result = await _execute_search_with_retry(engine, rewritten_query, filters=metadata_filters)
 
         # Extract episode_ids and metadata from source nodes
         episode_ids = set()
