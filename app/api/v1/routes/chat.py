@@ -70,12 +70,12 @@ async def _execute_query_with_retry(engine, question: str):
 
 
 @with_openai_retry
-async def _execute_chat_with_retry(engine, message: str, chat_history: Optional[List[Dict]] = None, filters: Optional[Dict] = None):
+async def _execute_chat_with_retry(engine, message: str, chat_history: Optional[List[Dict]] = None):
     """
     Execute conversational chat with automatic retry on OpenAI failures.
     Uses CondensePlusContextChatEngine for natural conversations with memory.
     """
-    return await engine.chat(message, chat_history=chat_history, filters=filters)
+    return await engine.chat(message, chat_history=chat_history)
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -111,6 +111,7 @@ async def chat(
         # Extract user context
         user_id = user_context["user_id"]  # Actual user ID for private chats
         company_id = user_context["company_id"]  # Company ID for shared data queries
+        user_email = user_context["email"]  # User email for chat record
 
         logger.info(f"💬 Chat query: {message.question}")
         logger.info(f"🔑 AUTH - user_id: {user_id[:8]}..., company_id: {company_id[:8]}...")
@@ -130,6 +131,7 @@ async def chat(
             chat_result = supabase.table('chats').insert({
                 'company_id': company_id,  # For company association
                 'user_id': user_id,        # Private to this user
+                'user_email': user_email,  # User email
                 'title': title
             }).execute()
             chat_id = chat_result.data[0]['id']
@@ -164,9 +166,8 @@ async def chat(
         # - Natural greeting handling ("hey" → friendly response, no retrieval)
         # - Context-aware follow-ups ("tell me more" → knows what "more" refers to)
         # - Full SubQuestionQueryEngine pipeline (vector + graph + reranking)
-        # CRITICAL: Pass company_id for data isolation
-        filters = {'company_id': company_id}
-        result = await _execute_chat_with_retry(engine, message.question, chat_history=chat_history, filters=filters)
+        # NOTE: Company filtering happens automatically via metadata filters in Qdrant (company_id in metadata)
+        result = await _execute_chat_with_retry(engine, message.question, chat_history=chat_history)
 
         logger.info(f"🔍 Query result keys: {result.keys()}")
         logger.info(f"🔍 Source nodes count: {len(result.get('source_nodes', []))}")
@@ -425,10 +426,12 @@ async def create_chat(
     try:
         user_id = user_context["user_id"]
         company_id = user_context["company_id"]
+        user_email = user_context["email"]
 
         result = supabase.table('chats').insert({
             'company_id': company_id,  # For company association
             'user_id': user_id,        # Private to this user
+            'user_email': user_email,  # User email
             'title': request.title or 'New Chat'
         }).execute()
 

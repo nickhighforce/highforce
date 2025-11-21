@@ -10,10 +10,10 @@ lsof -ti:8080 | xargs kill -9 2>/dev/null
 pkill -9 -f "uvicorn main:app" 2>/dev/null
 sleep 2
 
-# Unset old CORTEX environment variables that may conflict
-unset SUPABASE_URL SUPABASE_ANON_KEY SUPABASE_SERVICE_KEY
+# Unset old CORTEX environment variables that may conflict (but keep Supabase for auth!)
+# unset SUPABASE_URL SUPABASE_ANON_KEY SUPABASE_SERVICE_KEY
 unset MASTER_SUPABASE_URL MASTER_SUPABASE_SERVICE_KEY
-unset QDRANT_URL QDRANT_API_KEY QDRANT_COLLECTION_NAME
+# unset QDRANT_URL QDRANT_API_KEY QDRANT_COLLECTION_NAME
 unset DATABASE_URL TEST_CONNECTION_ID
 
 echo "✅ Environment cleaned"
