@@ -129,7 +129,7 @@ async def chat(
             logger.info(f"📝 Creating chat for user_id: {user_id[:8]}...")
             chat_result = supabase.table('chats').insert({
                 'company_id': company_id,  # For company association
-                'user_email': user_id,     # Private to this user
+                'user_id': user_id,        # Private to this user
                 'title': title
             }).execute()
             chat_id = chat_result.data[0]['id']
@@ -340,7 +340,7 @@ async def list_chats(
 
         result = supabase.table('chats')\
             .select('id, title, created_at, updated_at')\
-            .eq('user_email', user_id)\
+            .eq('user_id', user_id)\
             .eq('company_id', company_id)\
             .order('updated_at', desc=True)\
             .limit(limit)\
@@ -388,7 +388,7 @@ async def get_chat_messages(
         chat_result = supabase.table('chats')\
             .select('id')\
             .eq('id', chat_id)\
-            .eq('user_email', user_id)\
+            .eq('user_id', user_id)\
             .eq('company_id', company_id)\
             .execute()
 
@@ -428,7 +428,7 @@ async def create_chat(
 
         result = supabase.table('chats').insert({
             'company_id': company_id,  # For company association
-            'user_email': user_id,     # Private to this user
+            'user_id': user_id,        # Private to this user
             'title': request.title or 'New Chat'
         }).execute()
 
@@ -458,7 +458,7 @@ async def delete_chat(
         result = supabase.table('chats')\
             .delete()\
             .eq('id', chat_id)\
-            .eq('user_email', user_id)\
+            .eq('user_id', user_id)\
             .eq('company_id', company_id)\
             .execute()
 
