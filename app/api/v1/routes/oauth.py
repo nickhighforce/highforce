@@ -446,6 +446,10 @@ async def get_connection(company_id: str, provider_key: str) -> Optional[str]:
     """
     Get Nango connection_id for a given company and provider.
 
+    Strategy:
+    1. Try database lookup (fast, if DATABASE_URL set)
+    2. Fall back to Nango API lookup (always works)
+
     Args:
         company_id: Company ID (company_id in database)
         provider_key: Provider key (outlook, gmail, google-drive, quickbooks)
@@ -454,28 +458,59 @@ async def get_connection(company_id: str, provider_key: str) -> Optional[str]:
         connection_id if found, None otherwise
     """
     import psycopg
+    import httpx
 
-    # If DATABASE_URL not set, skip direct psycopg check
-    if not settings.database_url:
-        logger.debug(f"DATABASE_URL not set, skipping connection check for {provider_key}")
+    # Try database first (faster)
+    if settings.database_url:
+        try:
+            conn = psycopg.connect(settings.database_url, autocommit=True)
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT connection_id FROM connections WHERE company_id = %s AND provider_key = %s LIMIT 1",
+                    (company_id, provider_key)
+                )
+                result = cur.fetchone()
+                conn.close()
+
+                if result:
+                    logger.debug(f"Found connection via database: {provider_key}")
+                    return result[0]
+        except Exception as e:
+            logger.warning(f"Database lookup failed for {provider_key}, falling back to Nango API: {e}")
+
+    # Fall back to Nango API (works even if DATABASE_URL not set)
+    if not settings.nango_secret:
+        logger.debug(f"NANGO_SECRET not set, can't check Nango API")
         return None
 
     try:
-        # Use direct PostgreSQL connection (same as save_connection)
-        conn = psycopg.connect(settings.database_url, autocommit=True)
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT connection_id FROM connections WHERE company_id = %s AND provider_key = %s LIMIT 1",
-                (company_id, provider_key)
-            )
-            result = cur.fetchone()
-            conn.close()
+        logger.debug(f"Checking Nango API for {provider_key} connection for company {company_id}")
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            headers = {"Authorization": f"Bearer {settings.nango_secret}"}
 
-            if result:
-                return result[0]
+            # List all connections for this provider
+            url = f"https://api.nango.dev/connection?provider_config_key={provider_key}"
+            response = await client.get(url, headers=headers)
+
+            if response.status_code == 200:
+                connections = response.json().get("connections", [])
+
+                # Find connection matching this company_id
+                for conn in connections:
+                    end_user = conn.get("end_user", {})
+                    conn_company_id = end_user.get("organization_id") or end_user.get("organizationId")
+
+                    if conn_company_id == company_id:
+                        connection_id = conn.get("connection_id")
+                        logger.info(f"✅ Found connection via Nango API: {provider_key} -> {connection_id}")
+                        return connection_id
+
+                logger.debug(f"No matching connection found in Nango for {provider_key}")
+            else:
+                logger.warning(f"Nango API returned {response.status_code} for {provider_key}")
+
     except Exception as e:
-        logger.warning(f"Failed to get connection for {provider_key}: {e}")
-        logger.exception("Full error:")
+        logger.warning(f"Failed to check Nango API for {provider_key}: {e}")
 
     return None
 
