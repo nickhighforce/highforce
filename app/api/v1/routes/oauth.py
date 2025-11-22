@@ -455,6 +455,11 @@ async def get_connection(company_id: str, provider_key: str) -> Optional[str]:
     """
     import psycopg
 
+    # If DATABASE_URL not set, skip direct psycopg check
+    if not settings.database_url:
+        logger.debug(f"DATABASE_URL not set, skipping connection check for {provider_key}")
+        return None
+
     try:
         # Use direct PostgreSQL connection (same as save_connection)
         conn = psycopg.connect(settings.database_url, autocommit=True)
@@ -532,6 +537,16 @@ async def get_status(user_context: dict = Depends(get_current_user_context)):
 
         sync_status = {}
         for provider_key in ["outlook", "gmail", "google_drive", "quickbooks"]:
+            # If DATABASE_URL not set, skip sync status check
+            if not settings.database_url:
+                logger.debug(f"DATABASE_URL not set, using default sync status for {provider_key}")
+                sync_status[provider_key] = {
+                    "can_manual_sync": True,
+                    "initial_sync_completed": False,
+                    "initial_sync_started_at": None
+                }
+                continue
+
             try:
                 # Use direct PostgreSQL connection (consistent with save_connection)
                 conn = psycopg.connect(settings.database_url, autocommit=True)
