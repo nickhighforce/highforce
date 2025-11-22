@@ -58,16 +58,17 @@ async def save_connection(
         logger.debug(f"[SAVE_CONNECTION] Using Supabase client for upsert...")
         supabase = get_supabase()
 
-        # Build upsert payload
+        # Build upsert payload - user_id and user_email are REQUIRED by schema!
+        if not user_id or not user_email:
+            raise ValueError(f"user_id and user_email are required! Got user_id={user_id}, user_email={user_email}")
+
         payload = {
             "company_id": company_id,
             "provider_key": provider_key,
-            "connection_id": connection_id
+            "connection_id": connection_id,
+            "user_id": user_id,
+            "user_email": user_email
         }
-
-        # Add user_id if provided (for per-user attribution)
-        if user_id:
-            payload["user_id"] = user_id
 
         logger.debug(f"[SAVE_CONNECTION] Payload: {payload}")
 
