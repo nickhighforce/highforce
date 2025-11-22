@@ -490,8 +490,8 @@ async def get_connection(company_id: str, provider_key: str, user_id: Optional[s
         async with httpx.AsyncClient(timeout=10.0) as client:
             headers = {"Authorization": f"Bearer {settings.nango_secret}"}
 
-            # Check if connection exists in Nango
-            url = f"https://api.nango.dev/connection/{user_id}?provider_config_key={provider_key}"
+            # Check if connection exists in Nango (use /connections plural, not /connection singular!)
+            url = f"https://api.nango.dev/connections/{user_id}?provider_config_key={provider_key}"
             response = await client.get(url, headers=headers)
 
             if response.status_code == 200:
