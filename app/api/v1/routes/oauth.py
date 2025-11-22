@@ -444,37 +444,31 @@ async def reconnect_oauth(
 
 async def get_connection(company_id: str, provider_key: str, user_id: Optional[str] = None) -> Optional[str]:
     """
-    Get Nango connection_id for a given company, provider, and optionally user.
+    Get Nango connection_id for a given company, provider, and user.
 
     PRODUCTION ARCHITECTURE:
-    Uses Supabase (not DATABASE_URL/psycopg) for scalability.
-    - Fast: Single indexed query
-    - Reliable: Works in all environments
-    - Scalable: No need to fetch all 10k+ connections from Nango API
+    1. Check Supabase first (fast, if webhook saved it)
+    2. Fall back to Nango API (always authoritative source of truth)
 
     Args:
         company_id: Company ID (company_id in database)
         provider_key: Provider key (outlook, gmail, google-drive, quickbooks)
-        user_id: Optional user ID for per-user connections (recommended)
+        user_id: User ID for per-user connections
 
     Returns:
         connection_id if found, None otherwise
-
-    SECURITY: When user_id is provided, only returns connections owned by that user.
-    This enables per-user OAuth connections (Bob's Gmail ≠ Alice's Gmail).
     """
     from app.core.dependencies import get_supabase
+    import httpx
 
+    # Try Supabase first (fast path)
     try:
-        # Use Supabase client (always available in production)
         supabase = get_supabase()
-
         query = supabase.table("connections") \
             .select("connection_id") \
             .eq("company_id", company_id) \
             .eq("provider_key", provider_key)
 
-        # Filter by user_id if provided (recommended for per-user connections)
         if user_id:
             query = query.eq("user_id", user_id)
 
@@ -482,17 +476,35 @@ async def get_connection(company_id: str, provider_key: str, user_id: Optional[s
 
         if result.data and len(result.data) > 0:
             connection_id = result.data[0]["connection_id"]
-            user_qualifier = f" (user: {user_id})" if user_id else ""
-            logger.debug(f"Found connection via Supabase: {provider_key} -> {connection_id}{user_qualifier}")
+            logger.debug(f"Found connection via Supabase: {provider_key} -> {connection_id}")
             return connection_id
-        else:
-            user_qualifier = f" user: {user_id}" if user_id else f" company: {company_id}"
-            logger.debug(f"No connection found in Supabase for {provider_key} ({user_qualifier})")
-            return None
+    except Exception as e:
+        logger.warning(f"Supabase lookup failed for {provider_key}: {e}")
+
+    # Fall back to Nango API (authoritative source)
+    if not user_id or not settings.nango_secret:
+        return None
+
+    try:
+        logger.debug(f"Checking Nango API for {provider_key} connection for user {user_id}")
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            headers = {"Authorization": f"Bearer {settings.nango_secret}"}
+
+            # Check if connection exists in Nango
+            url = f"https://api.nango.dev/connection/{user_id}?provider_config_key={provider_key}"
+            response = await client.get(url, headers=headers)
+
+            if response.status_code == 200:
+                conn_data = response.json()
+                connection_id = conn_data.get("connection_id") or user_id
+                logger.info(f"✅ Found connection in Nango: {provider_key} -> {connection_id}")
+                return connection_id
+            else:
+                logger.debug(f"No connection found in Nango for {provider_key} (user: {user_id})")
+                return None
 
     except Exception as e:
-        logger.error(f"Failed to get connection for {provider_key}: {e}")
-        logger.exception("Full error:")
+        logger.warning(f"Failed to check Nango API for {provider_key}: {e}")
         return None
 
 
