@@ -412,8 +412,50 @@ def get_vision_ocr_business_check_prompt() -> str:
             "company_short_desc": company_short_desc
         })
     else:
-        # Fallback - return empty string, let file_parser use its hardcoded prompt
-        return ""
+        # Fallback - generalized business relevance check
+        context = get_company_context()
+        company_desc = f"{context['name']} ({context['description'][:100]})" if context['description'] else context['name']
+
+        return f"""FIRST, classify if this image contains BUSINESS-CRITICAL CONTENT for {company_desc}:
+
+**BUSINESS-CRITICAL content** (KEEP these):
+- Technical documents: CAD drawings, engineering specs, blueprints, schematics, quality reports
+- Business documents: Invoices, purchase orders, quotes, contracts, certificates (CoC, FOD, ISO)
+- Data/Reports: Charts, graphs, spreadsheets with business data, production schedules
+- Product photos: Parts, machinery, materials, prototypes
+- Screenshots: Technical content, work communications, business applications
+
+**NON-BUSINESS content** (SKIP these):
+- Company logos (standalone images without surrounding business content)
+- Email signatures (standalone without email body)
+- Generic marketing graphics, banners, decorative images
+- Personal photos unrelated to business operations
+- Social media graphics, memes, stock photos
+- Small icons, badges, or decorative elements
+
+Start your response with EXACTLY ONE LINE:
+CLASSIFICATION: BUSINESS or SKIP
+
+If SKIP, provide brief reason. If BUSINESS, continue with full extraction:
+
+=== FULL TEXT ===
+[Complete transcription of all visible text]
+
+=== DOCUMENT TYPE ===
+[Type of document]
+
+=== KEY ENTITIES ===
+- Companies: [list]
+- People: [list]
+- Amounts: [list]
+- Dates: [list]
+- Materials/Products: [list]
+- Reference Numbers: [list]
+
+=== CONTEXT ===
+[Brief description of what this document is about and its purpose]
+
+Be thorough and extract EVERYTHING visible."""
 
 
 def get_vision_ocr_extract_prompt() -> str:
@@ -422,7 +464,51 @@ def get_vision_ocr_extract_prompt() -> str:
 
     Returns the template from database (no variables needed).
     """
-    return get_prompt_template("vision_ocr_extract", default="")
+    template = get_prompt_template("vision_ocr_extract")
+
+    if template:
+        return template
+    else:
+        # Fallback - generalized text extraction prompt
+        return """Analyze this document/image and provide a comprehensive extraction:
+
+1. **Full Text Transcription**: Extract ALL text visible in the image (OCR)
+2. **Document Type**: What kind of document is this? (invoice, receipt, email, form, diagram, contract, etc.)
+3. **Key Information**: Extract important details:
+   - Companies/Organizations mentioned
+   - People (names, roles, emails)
+   - Monetary amounts and currencies
+   - Dates and deadlines
+   - Materials, products, or items
+   - Order numbers, invoice numbers, PO numbers
+   - Certifications or standards mentioned
+4. **Context**: What is this document about? What's the main purpose or subject?
+
+Format your response as:
+
+=== FULL TEXT ===
+[Complete transcription of all visible text]
+
+=== DOCUMENT TYPE ===
+[Type of document]
+
+=== KEY ENTITIES ===
+- Companies: [list]
+- People: [list]
+- Amounts: [list]
+- Dates: [list]
+- Materials/Products: [list]
+- Reference Numbers: [list]
+
+=== CONTEXT ===
+[Brief description of what this document is about and its purpose]
+
+Be thorough and extract EVERYTHING visible, including:
+- Handwritten text
+- Text in tables, forms, and diagrams
+- Watermarks and stamps
+- Header/footer information
+- Small print and fine details"""
 
 
 def get_company_name() -> str:
