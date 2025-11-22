@@ -606,3 +606,90 @@ async def get_status(user_context: dict = Depends(get_current_user_context)):
     except Exception as e:
         logger.error(f"Error getting status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/connect/sync-from-nango")
+@limiter.limit("10/minute")
+async def sync_connections_from_nango(
+    request: Request,
+    provider: str = Query(..., description="Provider to sync (microsoft | gmail)"),
+    user_context: dict = Depends(get_current_user_context),
+    http_client: httpx.AsyncClient = Depends(get_http_client)
+):
+    """
+    Manually check Nango for connections and sync them to database.
+
+    This is a fallback in case webhooks didn't fire.
+    The frontend can call this after OAuth completes to ensure the connection is saved.
+    """
+    user_id = user_context["user_id"]
+    company_id = user_context["company_id"]
+
+    logger.info(f"[SYNC_NANGO] Manual sync requested for user {user_id}, provider {provider}")
+
+    try:
+        # Map provider name to Nango integration ID
+        provider_map = {
+            "microsoft": "outlook",
+            "gmail": "gmail"
+        }
+        integration_id = provider_map.get(provider, provider)
+
+        # Query Nango for connections for this user
+        nango_url = f"https://api.nango.dev/connection/{integration_id}"
+        headers = {
+            "Authorization": f"Bearer {settings.nango_secret}",
+            "Connection-Id": user_id  # Nango uses user_id as connection_id
+        }
+
+        logger.debug(f"[SYNC_NANGO] Querying Nango: GET {nango_url}")
+        response = await http_client.get(nango_url, headers=headers)
+
+        if response.status_code == 404:
+            logger.info(f"[SYNC_NANGO] No connection found in Nango for user {user_id}, provider {provider}")
+            return {"status": "no_connection", "message": "No connection exists in Nango"}
+
+        response.raise_for_status()
+        conn_data = response.json()
+
+        logger.info(f"[SYNC_NANGO] Found connection in Nango: {conn_data.get('connection_id')}")
+
+        # Check if already in database
+        from app.services.nango import get_connection
+        existing = await get_connection(company_id, integration_id)
+
+        if existing:
+            logger.info(f"[SYNC_NANGO] Connection already exists in database")
+            return {
+                "status": "already_synced",
+                "message": "Connection already in database",
+                "connection": existing
+            }
+
+        # Save to database
+        from app.services.nango import save_connection
+        await save_connection(
+            company_id=company_id,
+            provider_key=integration_id,
+            connection_id=conn_data.get("connection_id", user_id),
+            user_id=user_id,
+            user_email=user_context.get("email")
+        )
+
+        logger.info(f"[SYNC_NANGO] ✅ Successfully synced connection from Nango to database")
+
+        return {
+            "status": "synced",
+            "message": "Connection synced from Nango to database",
+            "provider": provider,
+            "connection_id": conn_data.get("connection_id")
+        }
+
+    except httpx.HTTPStatusError as e:
+        logger.error(f"[SYNC_NANGO] HTTP error from Nango: {e.response.status_code}")
+        logger.error(f"[SYNC_NANGO] Response: {e.response.text}")
+        raise HTTPException(status_code=500, detail=f"Nango API error: {e.response.status_code}")
+    except Exception as e:
+        logger.error(f"[SYNC_NANGO] Error syncing from Nango: {e}")
+        logger.exception("[SYNC_NANGO] Full traceback:")
+        raise HTTPException(status_code=500, detail=str(e))
