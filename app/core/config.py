@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     # DATABASE (Supabase PostgreSQL) - ONE INSTANCE FOR EVERYTHING!
     # ============================================================================
 
-    database_url: Optional[str] = Field(default=None, description="PostgreSQL connection string (for psycopg)")
+    database_url: str = Field(description="PostgreSQL connection string (for psycopg - direct DB access)")
     supabase_url: str = Field(description="Supabase project URL (unified database)")
     supabase_anon_key: str = Field(description="Supabase anonymous key")
     supabase_service_key: str = Field(description="Supabase service key (backend uses this)")
