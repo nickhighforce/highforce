@@ -442,77 +442,58 @@ async def reconnect_oauth(
     }
 
 
-async def get_connection(company_id: str, provider_key: str) -> Optional[str]:
+async def get_connection(company_id: str, provider_key: str, user_id: Optional[str] = None) -> Optional[str]:
     """
-    Get Nango connection_id for a given company and provider.
+    Get Nango connection_id for a given company, provider, and optionally user.
 
-    Strategy:
-    1. Try database lookup (fast, if DATABASE_URL set)
-    2. Fall back to Nango API lookup (always works)
+    PRODUCTION ARCHITECTURE:
+    Uses Supabase (not DATABASE_URL/psycopg) for scalability.
+    - Fast: Single indexed query
+    - Reliable: Works in all environments
+    - Scalable: No need to fetch all 10k+ connections from Nango API
 
     Args:
         company_id: Company ID (company_id in database)
         provider_key: Provider key (outlook, gmail, google-drive, quickbooks)
+        user_id: Optional user ID for per-user connections (recommended)
 
     Returns:
         connection_id if found, None otherwise
+
+    SECURITY: When user_id is provided, only returns connections owned by that user.
+    This enables per-user OAuth connections (Bob's Gmail ≠ Alice's Gmail).
     """
-    import psycopg
-    import httpx
-
-    # Try database first (faster)
-    if settings.database_url:
-        try:
-            conn = psycopg.connect(settings.database_url, autocommit=True)
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT connection_id FROM connections WHERE company_id = %s AND provider_key = %s LIMIT 1",
-                    (company_id, provider_key)
-                )
-                result = cur.fetchone()
-                conn.close()
-
-                if result:
-                    logger.debug(f"Found connection via database: {provider_key}")
-                    return result[0]
-        except Exception as e:
-            logger.warning(f"Database lookup failed for {provider_key}, falling back to Nango API: {e}")
-
-    # Fall back to Nango API (works even if DATABASE_URL not set)
-    if not settings.nango_secret:
-        logger.debug(f"NANGO_SECRET not set, can't check Nango API")
-        return None
+    from app.core.dependencies import get_supabase
 
     try:
-        logger.debug(f"Checking Nango API for {provider_key} connection for company {company_id}")
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            headers = {"Authorization": f"Bearer {settings.nango_secret}"}
+        # Use Supabase client (always available in production)
+        supabase = get_supabase()
 
-            # List all connections for this provider
-            url = f"https://api.nango.dev/connection?provider_config_key={provider_key}"
-            response = await client.get(url, headers=headers)
+        query = supabase.table("connections") \
+            .select("connection_id") \
+            .eq("company_id", company_id) \
+            .eq("provider_key", provider_key)
 
-            if response.status_code == 200:
-                connections = response.json().get("connections", [])
+        # Filter by user_id if provided (recommended for per-user connections)
+        if user_id:
+            query = query.eq("user_id", user_id)
 
-                # Find connection matching this company_id
-                for conn in connections:
-                    end_user = conn.get("end_user", {})
-                    conn_company_id = end_user.get("organization_id") or end_user.get("organizationId")
+        result = query.limit(1).execute()
 
-                    if conn_company_id == company_id:
-                        connection_id = conn.get("connection_id")
-                        logger.info(f"✅ Found connection via Nango API: {provider_key} -> {connection_id}")
-                        return connection_id
-
-                logger.debug(f"No matching connection found in Nango for {provider_key}")
-            else:
-                logger.warning(f"Nango API returned {response.status_code} for {provider_key}")
+        if result.data and len(result.data) > 0:
+            connection_id = result.data[0]["connection_id"]
+            user_qualifier = f" (user: {user_id})" if user_id else ""
+            logger.debug(f"Found connection via Supabase: {provider_key} -> {connection_id}{user_qualifier}")
+            return connection_id
+        else:
+            user_qualifier = f" user: {user_id}" if user_id else f" company: {company_id}"
+            logger.debug(f"No connection found in Supabase for {provider_key} ({user_qualifier})")
+            return None
 
     except Exception as e:
-        logger.warning(f"Failed to check Nango API for {provider_key}: {e}")
-
-    return None
+        logger.error(f"Failed to get connection for {provider_key}: {e}")
+        logger.exception("Full error:")
+        return None
 
 
 @router.get("/status")
@@ -575,13 +556,13 @@ async def get_status(user_context: dict = Depends(get_current_user_context)):
         return None
 
     try:
-        # Use company_id to match how webhook saves connections
-        logger.info(f"[STATUS] Querying connections with company_id: {company_id}")
-        outlook_connection = await get_connection(company_id, settings.nango_provider_key_outlook) if settings.nango_provider_key_outlook else None
+        # Query connections for THIS user only (per-user OAuth)
+        logger.info(f"[STATUS] Querying connections for user_id: {user_id}, company_id: {company_id}")
+        outlook_connection = await get_connection(company_id, settings.nango_provider_key_outlook, user_id) if settings.nango_provider_key_outlook else None
         logger.info(f"[STATUS] Outlook connection found: {outlook_connection}")
-        gmail_connection = await get_connection(company_id, settings.nango_provider_key_gmail) if settings.nango_provider_key_gmail else None
-        drive_connection = await get_connection(company_id, settings.nango_provider_key_google_drive) if settings.nango_provider_key_google_drive else gmail_connection
-        quickbooks_connection = await get_connection(company_id, settings.nango_provider_key_quickbooks) if settings.nango_provider_key_quickbooks else None
+        gmail_connection = await get_connection(company_id, settings.nango_provider_key_gmail, user_id) if settings.nango_provider_key_gmail else None
+        drive_connection = await get_connection(company_id, settings.nango_provider_key_google_drive, user_id) if settings.nango_provider_key_google_drive else gmail_connection
+        quickbooks_connection = await get_connection(company_id, settings.nango_provider_key_quickbooks, user_id) if settings.nango_provider_key_quickbooks else None
 
         # Get detailed info from Nango for connected providers
         outlook_details = await get_nango_connection_details(outlook_connection, settings.nango_provider_key_outlook) if outlook_connection else None
