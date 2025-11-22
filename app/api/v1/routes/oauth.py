@@ -494,26 +494,48 @@ async def get_status(user_context: dict = Depends(get_current_user_context)):
     company_id = user_context["company_id"]
 
     async def get_nango_connection_details(connection_id: str, provider_key: str) -> dict:
-        """Fetch connection details from Nango API including last sync time."""
-        if not connection_id or not provider_key:
+        """Fetch connection details from Nango API including sync status."""
+        if not connection_id or not provider_key or not settings.nango_secret:
             return None
 
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                url = f"https://api.nango.dev/connection/{connection_id}?provider_config_key={provider_key}"
                 headers = {"Authorization": f"Bearer {settings.nango_secret}"}
-                response = await client.get(url, headers=headers)
 
-                if response.status_code == 200:
-                    data = response.json()
-                    # Nango returns metadata with last sync info
-                    return {
-                        "last_sync": data.get("metadata", {}).get("last_synced_at"),
-                        "email": data.get("metadata", {}).get("email"),
-                        "status": data.get("credentials_status")
+                # Get connection details
+                conn_url = f"https://api.nango.dev/connection/{connection_id}?provider_config_key={provider_key}"
+                conn_response = await client.get(conn_url, headers=headers)
+
+                result = {}
+                if conn_response.status_code == 200:
+                    conn_data = conn_response.json()
+                    result = {
+                        "email": conn_data.get("metadata", {}).get("email"),
+                        "credentials_status": conn_data.get("credentials_status"),
+                        "connection_id": conn_data.get("connection_id"),
+                        "provider_config_key": conn_data.get("provider_config_key")
                     }
+
+                # Get sync status (check all syncs for this provider)
+                sync_url = f"https://api.nango.dev/sync/status?provider_config_key={provider_key}&connection_id={connection_id}&syncs=*"
+                sync_response = await client.get(sync_url, headers=headers)
+
+                if sync_response.status_code == 200:
+                    sync_data = sync_response.json()
+                    # Extract sync info from response
+                    if sync_data and "syncs" in sync_data:
+                        syncs = sync_data["syncs"]
+                        if syncs:
+                            # Get latest sync info
+                            latest_sync = syncs[0] if isinstance(syncs, list) else syncs
+                            result["sync_status"] = latest_sync.get("status")
+                            result["last_sync"] = latest_sync.get("latest_sync", {}).get("created_at")
+                            result["next_sync"] = latest_sync.get("next_sync_at")
+
+                return result if result else None
+
         except Exception as e:
-            logger.warning(f"Failed to get Nango connection details: {e}")
+            logger.warning(f"Failed to get Nango connection details for {provider_key}: {e}")
 
         return None
 
