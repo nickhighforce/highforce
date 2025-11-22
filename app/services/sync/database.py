@@ -51,29 +51,33 @@ async def save_connection(
     """
     logger.info(f"[SAVE_CONNECTION] Starting - company_id={company_id}, provider={provider_key}, connection_id={connection_id}, user_id={user_id}, user_email={user_email}")
 
-    conn = None
+    # PRODUCTION FIX: Use Supabase client instead of psycopg (DATABASE_URL not set in Render)
     try:
-        logger.debug(f"[SAVE_CONNECTION] Getting database connection...")
-        conn = get_db_connection()
-        logger.debug(f"[SAVE_CONNECTION] Database connection established")
+        from app.core.dependencies import get_supabase
 
-        with conn.cursor() as cur:
-            logger.debug(f"[SAVE_CONNECTION] Executing INSERT/UPDATE query...")
-            cur.execute(
-                """
-                INSERT INTO connections (company_id, provider_key, connection_id)
-                VALUES (%s, %s, %s)
-                ON CONFLICT (company_id, provider_key)
-                DO UPDATE SET
-                    connection_id = EXCLUDED.connection_id,
-                    updated_at = NOW()
-                """,
-                (company_id, provider_key, connection_id)
-            )
-            logger.debug(f"[SAVE_CONNECTION] Query executed successfully")
+        logger.debug(f"[SAVE_CONNECTION] Using Supabase client for upsert...")
+        supabase = get_supabase()
 
-        logger.debug(f"[SAVE_CONNECTION] Committing transaction...")
-        conn.commit()
+        # Build upsert payload
+        payload = {
+            "company_id": company_id,
+            "provider_key": provider_key,
+            "connection_id": connection_id
+        }
+
+        # Add user_id if provided (for per-user attribution)
+        if user_id:
+            payload["user_id"] = user_id
+
+        logger.debug(f"[SAVE_CONNECTION] Payload: {payload}")
+
+        # Upsert to Supabase (ON CONFLICT handled by Supabase RPC or manual check)
+        result = supabase.table("connections").upsert(
+            payload,
+            on_conflict="company_id,provider_key"
+        ).execute()
+
+        logger.debug(f"[SAVE_CONNECTION] Supabase response: {result}")
         logger.info(f"✅ [SAVE_CONNECTION] SUCCESS - Saved connection for tenant {company_id} (company), user {user_id}, provider {provider_key}")
 
     except Exception as e:
@@ -86,21 +90,7 @@ async def save_connection(
         logger.error(f"   Error type: {type(e).__name__}")
         logger.error(f"   Error message: {str(e)}")
         logger.exception(f"   Full traceback:")
-        if conn:
-            try:
-                conn.rollback()
-                logger.debug(f"[SAVE_CONNECTION] Transaction rolled back")
-            except Exception as rollback_error:
-                logger.error(f"[SAVE_CONNECTION] Failed to rollback: {rollback_error}")
         raise
-
-    finally:
-        if conn:
-            try:
-                conn.close()
-                logger.debug(f"[SAVE_CONNECTION] Database connection closed")
-            except Exception as close_error:
-                logger.error(f"[SAVE_CONNECTION] Error closing connection: {close_error}")
 
 
 async def get_connection(
