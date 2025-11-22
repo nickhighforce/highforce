@@ -481,31 +481,9 @@ async def get_connection(company_id: str, provider_key: str, user_id: Optional[s
     except Exception as e:
         logger.warning(f"Supabase lookup failed for {provider_key}: {e}")
 
-    # Fall back to Nango API (authoritative source)
-    if not user_id or not settings.nango_secret:
-        return None
-
-    try:
-        logger.debug(f"Checking Nango API for {provider_key} connection for user {user_id}")
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            headers = {"Authorization": f"Bearer {settings.nango_secret}"}
-
-            # Check if connection exists in Nango (use /connections plural, not /connection singular!)
-            url = f"https://api.nango.dev/connections/{user_id}?provider_config_key={provider_key}"
-            response = await client.get(url, headers=headers)
-
-            if response.status_code == 200:
-                conn_data = response.json()
-                connection_id = conn_data.get("connection_id") or user_id
-                logger.info(f"✅ Found connection in Nango: {provider_key} -> {connection_id}")
-                return connection_id
-            else:
-                logger.debug(f"No connection found in Nango for {provider_key} (user: {user_id})")
-                return None
-
-    except Exception as e:
-        logger.warning(f"Failed to check Nango API for {provider_key}: {e}")
-        return None
+    # If not in Supabase, connection doesn't exist yet
+    # (Webhook saves the UUID connection_id to database when OAuth completes)
+    return None
 
 
 @router.get("/status")
